@@ -12,7 +12,7 @@ func main() {
 	cfg := &config{
 		addr: env.GetString("ADDR", ":8080"),
 		db: dbConfig{
-			url:          env.GetString("DB_URL", "postgresql://admin:adminpassword@localhost:5432/social?sslmode=disable"),
+			url:          env.GetString("DB_URL", ""),
 			maxOpenConns: env.GetInt("DB_MAX_OPENS_CONNS", 30),
 			maxIdleConns: env.GetInt("DB_MAX_IDLE_CONNS", 30),
 			maxIdleTime:  env.GetString("DB_MAX_IDLE_TIME", "15m"),
