@@ -12,7 +12,7 @@ func (app *application) internalServerError(w http.ResponseWriter, r *http.Reque
 
 func (app *application) badRequest(w http.ResponseWriter, r *http.Request, err error) {
 	log.Printf("bad request -  %s %s: %s", r.Method, r.URL.Path, err.Error())
-	writeJSONError(w, http.StatusInternalServerError, err.Error())
+	writeJSONError(w, http.StatusBadRequest, err.Error())
 }
 
 func (app *application) notFound(w http.ResponseWriter, r *http.Request, err error) {
