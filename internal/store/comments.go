@@ -57,7 +57,7 @@ func (s *CommentStore) GetByPostID(ctx context.Context, postID int64) ([]Comment
 	return comments, nil
 }
 
-func (s *CommentStore) Create(ctx context.Context, c *Comment) error {
+func (s *CommentStore) Create(ctx context.Context, c *Comment) (*Comment, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
 	defer cancel()
@@ -70,7 +70,7 @@ func (s *CommentStore) Create(ctx context.Context, c *Comment) error {
 	err := s.db.QueryRowContext(ctx, query, c.PostID, c.UserID, c.Content).
 		Scan(&c.ID, &c.CreatedAt)
 	if err != nil {
-		return err
+		return &Comment{}, err
 	}
-	return nil
+	return c, nil
 }
