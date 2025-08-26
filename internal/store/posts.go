@@ -16,6 +16,7 @@ type Post struct {
 	Tags      []string  `json:"tags"`
 	CreatedAt string    `json:"created_at"`
 	UpdatedAt string    `json:"updated_at"`
+	Version   int       `json:"version"`
 	Comments  []Comment `json:"comments"`
 }
 
@@ -24,6 +25,10 @@ type PostStore struct {
 }
 
 func (s *PostStore) Create(ctx context.Context, p *Post) error {
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
+	defer cancel()
+
 	query := `INSERT INTO posts (content, title, user_id, tags) 
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at, updated_at`
@@ -46,7 +51,11 @@ func (s *PostStore) Create(ctx context.Context, p *Post) error {
 }
 
 func (s *PostStore) GetByID(ctx context.Context, id int64) (*Post, error) {
-	query := `SELECT id, user_id, title, content, tags, created_at, updated_at 
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
+	defer cancel()
+
+	query := `SELECT id, user_id, title, content, tags, created_at, updated_at, version 
 		FROM posts WHERE id = $1`
 
 	var post Post
@@ -57,7 +66,8 @@ func (s *PostStore) GetByID(ctx context.Context, id int64) (*Post, error) {
 		&post.Content,
 		pq.Array(&post.Tags),
 		&post.CreatedAt,
-		&post.UpdatedAt)
+		&post.UpdatedAt,
+		&post.Version)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -70,18 +80,32 @@ func (s *PostStore) GetByID(ctx context.Context, id int64) (*Post, error) {
 }
 
 func (s *PostStore) Update(ctx context.Context, post *Post) error {
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
+	defer cancel()
+
 	query := `
-		UPDATE posts SET title = $1, content = $2 
-			WHERE id = $3
+		UPDATE posts SET title = $1, content = $2, version = version + 1 
+			WHERE id = $3 AND version = $4 
+			RETURNING version
 	`
-	_, err := s.db.ExecContext(ctx, query, post.Title, post.Content, post.ID)
+	err := s.db.QueryRowContext(ctx, query, post.Title, post.Content, post.ID, post.Version).
+		Scan(&post.Version)
 	if err != nil {
-		return err
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrResourceNotFound
+		default:
+			return err
+		}
 	}
 	return nil
 }
 
 func (s *PostStore) Delete(ctx context.Context, postID int64) error {
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
+	defer cancel()
 
 	query := `DELETE FROM posts WHERE id = $1`
 	res, err := s.db.ExecContext(ctx, query, postID)
