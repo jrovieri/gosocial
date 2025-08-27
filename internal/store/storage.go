@@ -9,6 +9,7 @@ import (
 
 var (
 	ErrResourceNotFound = errors.New("resource not found")
+	ErrConflict         = errors.New("resource alreay exists")
 	QueryTimeoutDuraton = 5 * time.Second
 )
 
@@ -22,6 +23,8 @@ type Storage struct {
 	Users interface {
 		Create(context.Context, *User) error
 		Get(context.Context, int64) (*User, error)
+		Follow(context.Context, int64, int64) error
+		UnFollow(context.Context, int64, int64) error
 	}
 	Comments interface {
 		GetByPostID(context.Context, int64) ([]Comment, error)
