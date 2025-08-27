@@ -36,3 +36,33 @@ func (s *UserStore) Create(ctx context.Context, u *User) error {
 	}
 	return nil
 }
+
+func (s *UserStore) Get(ctx context.Context, id int64) (*User, error) {
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
+	defer cancel()
+
+	query := `
+		SELECT id, username, email, password, created_at 
+		FROM users 
+		WHERE id = $1
+	`
+	var user User
+
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Password,
+		&user.CreatedAt,
+	)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return nil, ErrResourceNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &user, nil
+}
