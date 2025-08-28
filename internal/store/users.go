@@ -14,9 +14,9 @@ type UserStore struct {
 type User struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
-	Email     string `json:"email"`
+	Email     string `json:"email,omitempty"`
 	Password  string `json:"-"`
-	CreatedAt string `json:"created_at"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 type Follower struct {
