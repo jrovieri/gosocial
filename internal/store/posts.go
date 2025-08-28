@@ -130,7 +130,7 @@ func (s *PostStore) Delete(ctx context.Context, postID int64) error {
 	return nil
 }
 
-func (s *PostStore) GetUserFeed(ctx context.Context, id int64) ([]PostWithMetadata, error) {
+func (s *PostStore) GetUserFeed(ctx context.Context, id int64, fq PaginatedFeedQuery) ([]PostWithMetadata, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
 	defer cancel()
@@ -143,12 +143,15 @@ func (s *PostStore) GetUserFeed(ctx context.Context, id int64) ([]PostWithMetada
 			LEFT JOIN comments c ON c.post_id = p.id
 			LEFT JOIN users u ON p.user_id = u.id
 			JOIN followers f ON f.follower_id = p.user_id OR p.user_id = $1
-		WHERE f.user_id = $1 OR p.user_id = $1
-		GROUP BY p.id, u.username, u.id
-		ORDER BY p.created_at DESC 
+		WHERE (f.user_id = $1 OR u.id = $1)
+			AND (p.title ILIKE '%' || $4 || '%' OR p.content ILIKE '%' || $4 || '%') 
+			AND (p.tags @> $5 OR $5 IS NULL)
+		GROUP BY p.id, u.username, u.id	
+		ORDER BY p.created_at ` + fq.Sort + ` 
+		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, id)
+	rows, err := s.db.QueryContext(ctx, query, id, fq.Limit, fq.Offset, fq.Search, pq.Array(fq.Tags))
 	if err != nil {
 		return nil, err
 	}
@@ -175,4 +178,20 @@ func (s *PostStore) GetUserFeed(ctx context.Context, id int64) ([]PostWithMetada
 		feed = append(feed, p)
 	}
 	return feed, nil
+}
+
+func getFilterByDateString(fq PaginatedFeedQuery) string {
+	queryStr := " AND "
+	if fq.Since != "" && fq.Until != "" {
+		queryStr += " p.created_at BETWEEN $1 AND $2 "
+	}
+
+	if fq.Since != "" {
+		queryStr += " p.created_at >= $1 "
+	}
+
+	if fq.Until != "" {
+		queryStr += " p.created_at >= $1 "
+	}
+	return ""
 }
