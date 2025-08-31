@@ -1,11 +1,10 @@
 package main
 
 import (
-	"log"
-
 	"com.github/jrovieri/golang/social/internal/db"
 	"com.github/jrovieri/golang/social/internal/env"
 	"com.github/jrovieri/golang/social/internal/store"
+	"go.uber.org/zap"
 )
 
 const version = "0.0.1"
@@ -40,6 +39,10 @@ func main() {
 		env: env.GetString("ENV", "development"),
 	}
 
+	// Logger
+	logger := zap.Must(zap.NewProduction()).Sugar()
+	defer logger.Sync()
+
 	db, err := db.New(
 		cfg.db.url,
 		cfg.db.maxOpenConns,
@@ -47,18 +50,19 @@ func main() {
 		cfg.db.maxIdleTime,
 	)
 	if err != nil {
-		log.Panic(err)
+		logger.Panic(err)
 	}
 
 	defer db.Close()
-	log.Println("database connection established")
+	logger.Info("database connection established")
 
 	appStore := store.NewStorage(db)
 
 	app := &application{
 		config: *cfg,
 		store:  appStore,
+		logger: logger,
 	}
 
-	log.Fatal(app.run(app.mount()))
+	logger.Fatal(app.run(app.mount()))
 }
