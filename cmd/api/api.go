@@ -25,6 +25,8 @@ type config struct {
 	db     dbConfig
 	env    string
 	apiURL string
+	mail   mailConfig
+	auth   authConfig
 }
 
 type dbConfig struct {
@@ -32,6 +34,29 @@ type dbConfig struct {
 	maxOpenConns int
 	maxIdleConns int
 	maxIdleTime  string
+}
+
+type basicConfig struct {
+	user string
+	pass string
+}
+
+type tokenConfig struct {
+	secret string
+	exp    time.Duration
+	iss    string
+}
+
+type authConfig struct {
+	basic basicConfig
+	token tokenConfig
+}
+
+type mailConfig struct {
+	// sendGrid  sendGridConfig
+	// mailTrap  mailTrapConfig
+	fromEmail string
+	exp       time.Duration
 }
 
 func (app *application) mount() http.Handler {
@@ -69,10 +94,11 @@ func (app *application) mount() http.Handler {
 				r.Put("/unfollow", app.unfollowUserHandler)
 				r.Get("/feed", app.getUserFeedHandler)
 			})
+		})
 
-			// r.Group(func(r chi.Router) {
-
-			// })
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/", app.registerUserHandler)
+			r.Put("/activate/{token}", app.activateUserHandler)
 		})
 	})
 	return r
