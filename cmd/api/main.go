@@ -46,6 +46,12 @@ func main() {
 			fromEmail: env.GetString("FROM_EMAIL", ""),
 			apiKey:    env.GetString("MAIL_API_KEY", ""),
 		},
+		auth: authConfig{
+			basic: basicConfig{
+				user: env.GetString("AUTH_BASIC_USER", ""),
+				pass: env.GetString("AUTH_BASIC_PASS", ""),
+			},
+		},
 	}
 
 	// Logger
