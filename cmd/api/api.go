@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"com.github/jrovieri/golang/social/docs"
+	"com.github/jrovieri/golang/social/internal/mailer"
 	"com.github/jrovieri/golang/social/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,15 +19,17 @@ type application struct {
 	config config
 	store  store.Storage
 	logger *zap.SugaredLogger
+	mailer mailer.Client
 }
 
 type config struct {
-	addr   string
-	db     dbConfig
-	env    string
-	apiURL string
-	mail   mailConfig
-	auth   authConfig
+	addr        string
+	db          dbConfig
+	env         string
+	apiURL      string
+	mail        mailConfig
+	auth        authConfig
+	frontendURL string
 }
 
 type dbConfig struct {
@@ -53,8 +56,7 @@ type authConfig struct {
 }
 
 type mailConfig struct {
-	// sendGrid  sendGridConfig
-	// mailTrap  mailTrapConfig
+	apiKey    string
 	fromEmail string
 	exp       time.Duration
 }

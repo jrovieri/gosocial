@@ -5,6 +5,7 @@ import (
 
 	"com.github/jrovieri/golang/social/internal/db"
 	"com.github/jrovieri/golang/social/internal/env"
+	"com.github/jrovieri/golang/social/internal/mailer"
 	"com.github/jrovieri/golang/social/internal/store"
 	"go.uber.org/zap"
 )
@@ -30,8 +31,9 @@ const version = "0.0.1"
 // @description
 func main() {
 	cfg := &config{
-		addr:   env.GetString("ADDR", ":8080"),
-		apiURL: env.GetString("EXTERNAL_URL", "localhost:8080"),
+		addr:        env.GetString("ADDR", ":8080"),
+		apiURL:      env.GetString("EXTERNAL_URL", "localhost:8080"),
+		frontendURL: env.GetString("FRONTEND_URL", "localhost:4040"),
 		db: dbConfig{
 			url:          env.GetString("DB_URL", ""),
 			maxOpenConns: env.GetInt("DB_MAX_OPENS_CONNS", 30),
@@ -40,7 +42,9 @@ func main() {
 		},
 		env: env.GetString("ENV", "development"),
 		mail: mailConfig{
-			exp: time.Hour * 24 * 3,
+			exp:       time.Hour * 24 * 3,
+			fromEmail: env.GetString("FROM_EMAIL", ""),
+			apiKey:    env.GetString("MAIL_API_KEY", ""),
 		},
 	}
 
@@ -63,10 +67,17 @@ func main() {
 
 	appStore := store.NewStorage(db)
 
+	// Mail
+	mailsender, err := mailer.NewMailSender(cfg.mail.apiKey, cfg.mail.fromEmail)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	app := &application{
 		config: *cfg,
 		store:  appStore,
 		logger: logger,
+		mailer: mailsender,
 	}
 
 	logger.Fatal(app.run(app.mount()))

@@ -171,6 +171,20 @@ func (s *UserStore) Activate(ctx context.Context, token string) error {
 	})
 }
 
+func (s *UserStore) Delete(ctx context.Context, userID int64) error {
+	return withTx(s.db, ctx, func(tx *sql.Tx) error {
+		if err := s.delete(ctx, tx, userID); err != nil {
+			return err
+		}
+
+		if err := s.deleteUserInvitation(ctx, tx, userID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
 func (s *UserStore) createUserInvitation(ctx context.Context, tx *sql.Tx, token string,
 	invitationExp time.Duration, userID int64) error {
 
@@ -243,6 +257,20 @@ func (s *UserStore) deleteUserInvitation(ctx context.Context, tx *sql.Tx, userID
 	defer cancel()
 
 	query := `DELETE FROM user_invitations WHERE user_id = $1`
+
+	_, err := tx.ExecContext(ctx, query, userID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *UserStore) delete(ctx context.Context, tx *sql.Tx, userID int64) error {
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
+	defer cancel()
+
+	query := `DELETE FROM users WHERE id = $1`
 
 	_, err := tx.ExecContext(ctx, query, userID)
 	if err != nil {

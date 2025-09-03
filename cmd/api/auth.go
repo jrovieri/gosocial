@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/sha512"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 
+	"com.github/jrovieri/golang/social/internal/mailer"
 	"com.github/jrovieri/golang/social/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -59,11 +61,6 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	hash := sha512.Sum512([]byte(plainToken))
 	hashToken := hex.EncodeToString(hash[:])
 
-	userWithToken := UserWithToken{
-		User:  user,
-		Token: plainToken,
-	}
-
 	err := app.store.Users.CreateAndInvite(r.Context(), user, hashToken, app.config.mail.exp)
 	if err != nil {
 		switch err {
@@ -76,6 +73,36 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
+
+	userWithToken := UserWithToken{
+		User:  user,
+		Token: plainToken,
+	}
+
+	activationURL := fmt.Sprintf("%s/confirm/%s", app.config.frontendURL, plainToken)
+
+	isProdEnv := app.config.env == "production"
+	vars := struct {
+		Username      string
+		ActivationURL string
+	}{
+		Username:      user.Username,
+		ActivationURL: activationURL,
+	}
+
+	status, err := app.mailer.Send(mailer.UserWelcomeTemplate, user.Username, user.Email, vars, !isProdEnv)
+	if err != nil {
+		app.logger.Errorw("error sending welcome email", "error", err)
+
+		// Rollback user creation if email fails
+		if err := app.store.Users.Delete(r.Context(), user.ID); err != nil {
+			app.logger.Errorw("error deleting user", "error", err)
+		}
+		app.internalServerError(w, r, err)
+		return
+	}
+
+	app.logger.Infow("Email sent", "status code", status)
 
 	if err := app.jsonResponse(w, http.StatusCreated, userWithToken); err != nil {
 		app.internalServerError(w, r, err)
