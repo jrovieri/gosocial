@@ -1,0 +1,2 @@
+- unathorized user is not an error
+- send local email on dev
