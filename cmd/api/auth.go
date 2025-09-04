@@ -1,14 +1,16 @@
 package main
 
 import (
-	"crypto/sha512"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"time"
 
 	"com.github/jrovieri/golang/social/internal/mailer"
 	"com.github/jrovieri/golang/social/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -34,7 +36,7 @@ type UserWithToken struct {
 //	@Success		201		{object}	UserWithToken		"User registered"
 //	@Failure		400		{object}	error
 //	@Failure		500		{object}	error
-//	@Router			/authentication/user [post]
+//	@Router			/auth [post]
 func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	var payload RegisterUserPayload
 	if err := readJSON(w, r, &payload); err != nil {
@@ -58,7 +60,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	plainToken := uuid.New().String()
-	hash := sha512.Sum512([]byte(plainToken))
+	hash := sha256.Sum256([]byte(plainToken))
 	hashToken := hex.EncodeToString(hash[:])
 
 	err := app.store.Users.CreateAndInvite(r.Context(), user, hashToken, app.config.mail.exp)
@@ -120,7 +122,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 //	@Failure		404		{object}	error
 //	@Failure		500		{object}	error
 //	@Security		ApiKeyAuth
-//	@Router			/users/activate/{token} [put]
+//	@Router			/auth/activate/{token} [put]
 func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	token := chi.URLParam(r, "token")
@@ -134,5 +136,72 @@ func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Reque
 			app.internalServerError(w, r, err)
 		}
 		return
+	}
+}
+
+type CreateUserToken struct {
+	Email    string `json:"email" validate:"required,email,max=255"`
+	Password string `json:"password" validate:"required,min=3,max=72"`
+}
+
+// createTokenHandler godoc
+//
+//	@Summary		Creates a token
+//	@Description	Creates a token for a user
+//	@Tags			authentication
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		CreateUserTokenPayload	true	"User credentials"
+//	@Success		200		{string}	string					"Token"
+//	@Failure		400		{object}	error
+//	@Failure		401		{object}	error
+//	@Failure		500		{object}	error
+//	@Router			/auth/token [post]
+func (app *application) createTokenHandler(w http.ResponseWriter, r *http.Request) {
+
+	var payload CreateUserToken
+	if err := readJSON(w, r, &payload); err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	if err := Validate.Struct(payload); err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	user, err := app.store.Users.GetByEmail(r.Context(), payload.Email)
+	if err != nil {
+		switch err {
+		case store.ErrResourceNotFound:
+			app.unauthorized(w, r, err)
+		default:
+			app.internalServerError(w, r, err)
+		}
+		return
+	}
+
+	if err := user.Password.CheckPassword(payload.Password); err != nil {
+		app.unauthorized(w, r, err)
+		return
+	}
+
+	claims := jwt.MapClaims{
+		"sub": user.ID,
+		"exp": time.Now().Add(app.config.auth.token.exp).Unix(),
+		"iat": time.Now().Unix(),
+		"nbf": time.Now().Unix(),
+		"iss": app.config.auth.token.iss,
+		"aud": app.config.auth.token.iss,
+	}
+
+	token, err := app.autheticator.GenerateToken(claims)
+	if err != nil {
+		app.internalServerError(w, r, err)
+		return
+	}
+
+	if err := app.jsonResponse(w, http.StatusCreated, token); err != nil {
+		app.internalServerError(w, r, err)
 	}
 }

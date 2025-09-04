@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"com.github/jrovieri/golang/social/docs"
+	"com.github/jrovieri/golang/social/internal/auth"
 	"com.github/jrovieri/golang/social/internal/mailer"
 	"com.github/jrovieri/golang/social/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -16,10 +17,11 @@ import (
 )
 
 type application struct {
-	config config
-	store  store.Storage
-	logger *zap.SugaredLogger
-	mailer mailer.Client
+	config       config
+	store        store.Storage
+	logger       *zap.SugaredLogger
+	mailer       mailer.Client
+	autheticator auth.Authenticator
 }
 
 type config struct {
@@ -77,6 +79,7 @@ func (app *application) mount() http.Handler {
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
 
 		r.Route("/posts", func(r chi.Router) {
+			r.Use(app.AuthTokenMiddleware())
 			r.Post("/", app.createPostHandler)
 
 			r.Route("/{postID}", func(r chi.Router) {
@@ -90,7 +93,7 @@ func (app *application) mount() http.Handler {
 
 		r.Route("/users", func(r chi.Router) {
 			r.Route("/{userID}", func(r chi.Router) {
-				r.Use(app.userContextMiddleware)
+				r.Use(app.AuthTokenMiddleware())
 				r.Get("/", app.getUserHandler)
 				r.Put("/follow", app.followUserHandler)
 				r.Put("/unfollow", app.unfollowUserHandler)
@@ -101,6 +104,7 @@ func (app *application) mount() http.Handler {
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/", app.registerUserHandler)
 			r.Put("/activate/{token}", app.activateUserHandler)
+			r.Post("/token", app.createTokenHandler)
 		})
 	})
 	return r

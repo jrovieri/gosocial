@@ -45,6 +45,10 @@ func (p *password) Set(text string) error {
 	return nil
 }
 
+func (p *password) CheckPassword(text string) error {
+	return bcrypt.CompareHashAndPassword(p.hash, []byte(text))
+}
+
 type Follower struct {
 	UserID     int64  `json:"user_id"`
 	FollowerID int64  `json:"follower_id"`
@@ -78,7 +82,7 @@ func (s *UserStore) Create(ctx context.Context, tx *sql.Tx, u *User) error {
 	return nil
 }
 
-func (s *UserStore) Get(ctx context.Context, id int64) (*User, error) {
+func (s *UserStore) GetByID(ctx context.Context, id int64) (*User, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
 	defer cancel()
@@ -94,7 +98,37 @@ func (s *UserStore) Get(ctx context.Context, id int64) (*User, error) {
 		&user.ID,
 		&user.Username,
 		&user.Email,
-		&user.Password,
+		&user.Password.hash,
+		&user.CreatedAt,
+	)
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return nil, ErrResourceNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &user, nil
+}
+
+func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error) {
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuraton)
+	defer cancel()
+
+	query := `
+		SELECT id, username, email, password, created_at 
+		FROM users 
+		WHERE email = $1 AND is_active = true
+	`
+	var user User
+
+	err := s.db.QueryRowContext(ctx, query, email).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Password.hash,
 		&user.CreatedAt,
 	)
 	if err != nil {

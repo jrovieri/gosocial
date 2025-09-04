@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"com.github/jrovieri/golang/social/internal/auth"
 	"com.github/jrovieri/golang/social/internal/db"
 	"com.github/jrovieri/golang/social/internal/env"
 	"com.github/jrovieri/golang/social/internal/mailer"
@@ -48,8 +49,13 @@ func main() {
 		},
 		auth: authConfig{
 			basic: basicConfig{
-				user: env.GetString("AUTH_BASIC_USER", ""),
-				pass: env.GetString("AUTH_BASIC_PASS", ""),
+				user: env.GetString("AUTH_BASIC_USER", "admin"),
+				pass: env.GetString("AUTH_BASIC_PASS", "admin"),
+			},
+			token: tokenConfig{
+				secret: env.GetString("AUTH_TOKEN_SECRET", "development"),
+				exp:    time.Hour * 24 * 3,
+				iss:    auth.TokenHost,
 			},
 		},
 	}
@@ -79,11 +85,14 @@ func main() {
 		logger.Fatal(err)
 	}
 
+	jwtAuth := auth.NewJWTAuthenticator(cfg.auth.token.secret, cfg.auth.token.iss, cfg.auth.token.iss)
+
 	app := &application{
-		config: *cfg,
-		store:  appStore,
-		logger: logger,
-		mailer: mailsender,
+		config:       *cfg,
+		store:        appStore,
+		logger:       logger,
+		mailer:       mailsender,
+		autheticator: jwtAuth,
 	}
 
 	logger.Fatal(app.run(app.mount()))
